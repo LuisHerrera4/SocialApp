@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">SocialApp</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">Android Studio</string>
+    <string name="nav_header_subtitle">android.studio@android.com</string>
+    <string name="nav_header_desc">Navigation header</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_gallery">Gallery</string>
+    <string name="menu_slideshow">Slideshow</string>
+    <string name="APPWRITE_PROJECT_ID">67a6195f0018c3981b49</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="APPWRITE_DATABASE_ID">67af5334003aae679ce0</string>
+    <string name="APPWRITE_POSTS_COLLECTION_ID">67af535b00339b4c7aa2</string>
+</resources>

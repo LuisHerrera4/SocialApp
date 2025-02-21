@@ -12,6 +12,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,12 +21,16 @@ import com.bumptech.glide.Glide;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import io.appwrite.Client;
+import io.appwrite.Query;
 import io.appwrite.coroutines.CoroutineCallback;
 import io.appwrite.exceptions.AppwriteException;
 import io.appwrite.models.DocumentList;
@@ -44,6 +49,7 @@ public class HomeFragment extends Fragment {
     private static final String ARG_PARAM2 = "param2";
 
     private NavController navController;
+    AppViewModel appViewModel;
     PostsAdapter adapter;
     private String mParam1;
     private String mParam2;
@@ -68,6 +74,7 @@ public class HomeFragment extends Fragment {
      */
     public static HomeFragment newInstance(String param1, String param2) {
         HomeFragment fragment = new HomeFragment();
+
         Bundle args = new Bundle();
         args.putString(ARG_PARAM1, param1);
         args.putString(ARG_PARAM2, param2);
@@ -103,7 +110,7 @@ public class HomeFragment extends Fragment {
         emailTextView = header.findViewById(R.id.emailTextView);
 
         navController = Navigation.findNavController(view);
-
+        appViewModel = new ViewModelProvider(requireActivity()).get(AppViewModel.class);
         // Inicializar Appwrite Client
         client = new Client(requireContext()).setProject(getString(R.string.APPWRITE_PROJECT_ID));
         account = new Account(client);
@@ -144,14 +151,17 @@ public class HomeFragment extends Fragment {
     class PostViewHolder extends RecyclerView.ViewHolder
     {
         ImageView authorPhotoImageView, likeImageView, mediaImageView;
-        TextView authorTextView, contentTextView, numLikesTextView;
+        TextView authorTextView, contentTextView, numLikesTextView, timeTextView;
         PostViewHolder(@NonNull View itemView) {
             super(itemView);
             authorPhotoImageView = itemView.findViewById(R.id.authorPhotoImageView);
             likeImageView = itemView.findViewById(R.id.likeImageView);
+            mediaImageView = itemView.findViewById(R.id.mediaImage);
             authorTextView = itemView.findViewById(R.id.authorTextView);
             contentTextView = itemView.findViewById(R.id.contentTextView);
             numLikesTextView = itemView.findViewById(R.id.numLikesTextView);
+            timeTextView= itemView.findViewById(R.id.timeTextView);
+
         }
     }
     class PostsAdapter extends RecyclerView.Adapter<PostViewHolder> {
@@ -180,6 +190,18 @@ public class HomeFragment extends Fragment {
             }
             holder.authorTextView.setText(post.get("author").toString());
             holder.contentTextView.setText(post.get("content").toString());
+
+            //Fecha y hora
+
+            SimpleDateFormat formatear = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+            Calendar calendar = Calendar.getInstance();
+            if(post.get("time")!= null)
+                    calendar.setTimeInMillis((long)post.get("time"));
+            else
+                calendar.setTimeInMillis(0);
+
+
+            holder.timeTextView.setText(formatear.format(calendar.getTime()));
 
             // Gestion de likes
             List<String> likes = (List<String>) post.get("likes");
@@ -220,7 +242,26 @@ public class HomeFragment extends Fragment {
                     throw new RuntimeException(e);
                 }
             });
+
+            // Miniatura de media
+            if (post.get("mediaUrl") != null) {
+                holder.mediaImageView.setVisibility(View.VISIBLE);
+                if ("audio".equals(post.get("mediaType").toString())) {
+                    Glide.with(requireView()).load(R.drawable.audio).centerCrop().into(holder.mediaImageView);
+                } else {
+                    Glide.with(requireView()).load(post.get("mediaUrl").toString()).centerCrop().into
+                            (holder.mediaImageView);
+                }
+                holder.mediaImageView.setOnClickListener(view -> {
+                    appViewModel.postSeleccionado.setValue(post);
+                    navController.navigate(R.id.mediaFragment);
+                });
+            } else {
+                holder.mediaImageView.setVisibility(View.GONE);
+            }
         }
+
+
         @Override
         public int getItemCount() {
             return lista == null ? 0 : lista.getDocuments().size();
@@ -230,6 +271,7 @@ public class HomeFragment extends Fragment {
             this.lista = lista;
             notifyDataSetChanged();
         }
+
 
     }
 
@@ -241,7 +283,8 @@ public class HomeFragment extends Fragment {
             databases.listDocuments(
                     getString(R.string.APPWRITE_DATABASE_ID), // databaseId
                     getString(R.string.APPWRITE_POSTS_COLLECTION_ID), // collectionId
-                    new ArrayList<>(), // queries (optional)
+                    Arrays.asList(Query.Companion.orderDesc("time"), Query.Companion.limit(50)), // queries (optional)
+
                     new CoroutineCallback<>((result, error) -> {
                         if (error != null) {
                             Snackbar.make(requireView(), "Error al obtener los posts: "
@@ -256,4 +299,5 @@ public class HomeFragment extends Fragment {
             throw new RuntimeException(e);
         }
     }
+
 }

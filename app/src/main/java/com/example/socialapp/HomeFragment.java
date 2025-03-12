@@ -1,11 +1,13 @@
 package com.example.socialapp;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -33,62 +35,30 @@ import io.appwrite.Client;
 import io.appwrite.Query;
 import io.appwrite.coroutines.CoroutineCallback;
 import io.appwrite.exceptions.AppwriteException;
+import io.appwrite.models.Document;
 import io.appwrite.models.DocumentList;
 import io.appwrite.services.Account;
 import io.appwrite.services.Databases;
 
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link HomeFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
 public class HomeFragment extends Fragment {
-
-    // Argumentos para inicialización del fragmento
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
 
     private NavController navController;
     AppViewModel appViewModel;
     PostsAdapter adapter;
-    private String mParam1;
-    private String mParam2;
-
+    private String userId;
     private ImageView photoImageView;
     private TextView displayNameTextView, emailTextView;
     private Client client;
     private Account account;
-    private String userId;
 
     public HomeFragment() {
         // Constructor vacío requerido
     }
 
-    /**
-     * Método de fábrica para crear una nueva instancia del fragmento
-     * con los parámetros proporcionados.
-     *
-     * @param param1 Parámetro 1.
-     * @param param2 Parámetro 2.
-     * @return Una nueva instancia de HomeFragment.
-     */
-    public static HomeFragment newInstance(String param1, String param2) {
-        HomeFragment fragment = new HomeFragment();
-
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
-        return fragment;
-    }
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
-        }
+        // Puedes inicializar argumentos si es necesario
     }
 
     @Override
@@ -102,7 +72,7 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Obtener referencias a los elementos del encabezado del NavigationView
+        // Obtener referencias de los elementos del header del NavigationView
         NavigationView navigationView = view.getRootView().findViewById(R.id.nav_view);
         View header = navigationView.getHeaderView(0);
         photoImageView = header.findViewById(R.id.imageView);
@@ -111,7 +81,8 @@ public class HomeFragment extends Fragment {
 
         navController = Navigation.findNavController(view);
         appViewModel = new ViewModelProvider(requireActivity()).get(AppViewModel.class);
-        // Inicializar Appwrite Client
+
+        // Inicializar el cliente de Appwrite
         client = new Client(requireContext()).setProject(getString(R.string.APPWRITE_PROJECT_ID));
         account = new Account(client);
         Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -134,24 +105,22 @@ public class HomeFragment extends Fragment {
         } catch (AppwriteException e) {
             throw new RuntimeException(e);
         }
-        view.findViewById(R.id.gotoNewPostFragmentButton).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                navController.navigate(R.id.newPostFragment);
-}
-        });
 
+        // Navegar a la creación de un nuevo post
+        view.findViewById(R.id.gotoNewPostFragmentButton).setOnClickListener(v ->
+                navController.navigate(R.id.newPostFragment));
+
+        // Configurar el RecyclerView
         RecyclerView postsRecyclerView = view.findViewById(R.id.postsRecyclerView);
         adapter = new PostsAdapter();
         postsRecyclerView.setAdapter(adapter);
-
-
     }
 
-    class PostViewHolder extends RecyclerView.ViewHolder
-    {
-        ImageView authorPhotoImageView, likeImageView, mediaImageView;
+    // ViewHolder para cada post
+    class PostViewHolder extends RecyclerView.ViewHolder {
+        ImageView authorPhotoImageView, likeImageView, mediaImageView, deletePostButton;
         TextView authorTextView, contentTextView, numLikesTextView, timeTextView;
+
         PostViewHolder(@NonNull View itemView) {
             super(itemView);
             authorPhotoImageView = itemView.findViewById(R.id.authorPhotoImageView);
@@ -160,81 +129,97 @@ public class HomeFragment extends Fragment {
             authorTextView = itemView.findViewById(R.id.authorTextView);
             contentTextView = itemView.findViewById(R.id.contentTextView);
             numLikesTextView = itemView.findViewById(R.id.numLikesTextView);
-            timeTextView= itemView.findViewById(R.id.timeTextView);
-
+            timeTextView = itemView.findViewById(R.id.timeTextView);
+            deletePostButton = itemView.findViewById(R.id.deletePostButton);
         }
     }
+
+    // Adaptador para el RecyclerView
     class PostsAdapter extends RecyclerView.Adapter<PostViewHolder> {
-        DocumentList<Map<String,Object>> lista = null;
+        // Convertimos la lista de documentos en una lista modificable de Map<String, Object>
+        private List<Map<String, Object>> lista = new ArrayList<>();
+
+        // Método para establecer la lista desde el DocumentList obtenido de Appwrite
+        public void establecerLista(DocumentList<Map<String, Object>> documentList) {
+            lista.clear();
+            for (Document<Map<String, Object>> document : documentList.getDocuments()) {
+                Map<String, Object> data = document.getData();
+                if (data != null) {
+                    data.put("$id", document.getId()); // Añadir ID al mapa de datos
+                    lista.add(data);
+                }
+            }
+            notifyDataSetChanged();
+        }
+
+
         @NonNull
+        @Override
+        public PostViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View itemView = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.viewholder_post, parent, false);
+            return new PostViewHolder(itemView);
+        }
 
         @Override
-        public PostViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int
-                viewType) {
-            return new
-                    PostViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.viewholder_post, parent, false));
-        }
-        @Override
-        public void onBindViewHolder(@NonNull PostViewHolder holder, int position)
-        {
-            Map<String,Object> post =
-                    lista.getDocuments().get(position).getData();
-            if (post.get("authorPhotoUrl") == null)
-            {
+        public void onBindViewHolder(@NonNull PostViewHolder holder, int position) {
+            Map<String, Object> post = lista.get(position);
+            String postId = post.get("$id").toString();
+            String postAuthorId = post.get("uid").toString();
+
+            // Cargar foto de perfil
+            if (post.get("authorPhotoUrl") == null) {
                 holder.authorPhotoImageView.setImageResource(R.drawable.user);
-            }
-            else
-            {
-                Glide.with(getContext()).load(post.get("authorPhotoUrl").toString()).circleCrop()
+            } else {
+                Glide.with(getContext())
+                        .load(post.get("authorPhotoUrl").toString())
+                        .circleCrop()
                         .into(holder.authorPhotoImageView);
             }
+
             holder.authorTextView.setText(post.get("author").toString());
             holder.contentTextView.setText(post.get("content").toString());
 
-            //Fecha y hora
-
+            // Formateo de fecha y hora
             SimpleDateFormat formatear = new SimpleDateFormat("dd/MM/yyyy HH:mm");
             Calendar calendar = Calendar.getInstance();
-            if(post.get("time")!= null)
-                    calendar.setTimeInMillis((long)post.get("time"));
+            if (post.get("time") != null)
+                calendar.setTimeInMillis((long) post.get("time"));
             else
                 calendar.setTimeInMillis(0);
-
-
             holder.timeTextView.setText(formatear.format(calendar.getTime()));
 
-            // Gestion de likes
+            // Gestión de likes
             List<String> likes = (List<String>) post.get("likes");
-            if(likes.contains(userId))
+            if (likes.contains(userId))
                 holder.likeImageView.setImageResource(R.drawable.like_on);
             else
                 holder.likeImageView.setImageResource(R.drawable.like_off);
             holder.numLikesTextView.setText(String.valueOf(likes.size()));
+
             holder.likeImageView.setOnClickListener(view -> {
                 Databases databases = new Databases(client);
                 Handler mainHandler = new Handler(Looper.getMainLooper());
-                List<String> nuevosLikes = likes;
-                if(nuevosLikes.contains(userId))
+                List<String> nuevosLikes = new ArrayList<>(likes);
+                if (nuevosLikes.contains(userId))
                     nuevosLikes.remove(userId);
                 else
                     nuevosLikes.add(userId);
                 Map<String, Object> data = new HashMap<>();
                 data.put("likes", nuevosLikes);
                 try {
-
                     databases.updateDocument(
                             getString(R.string.APPWRITE_DATABASE_ID),
                             getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
-                            post.get("$id").toString(), // documentId
-                            data, // data (optional)
-                            new ArrayList<>(), // permissions (optional)
+                            postId,
+                            data,
+                            new ArrayList<>(),
                             new CoroutineCallback<>((result, error) -> {
                                 if (error != null) {
                                     error.printStackTrace();
                                     return;
                                 }
-                                System.out.println("Likes actualizados:" +
-                                        result.toString());
+                                System.out.println("Likes actualizados: " + result.toString());
                                 mainHandler.post(() -> obtenerPosts());
                             })
                     );
@@ -247,10 +232,15 @@ public class HomeFragment extends Fragment {
             if (post.get("mediaUrl") != null) {
                 holder.mediaImageView.setVisibility(View.VISIBLE);
                 if ("audio".equals(post.get("mediaType").toString())) {
-                    Glide.with(requireView()).load(R.drawable.audio).centerCrop().into(holder.mediaImageView);
+                    Glide.with(requireView())
+                            .load(R.drawable.audio)
+                            .centerCrop()
+                            .into(holder.mediaImageView);
                 } else {
-                    Glide.with(requireView()).load(post.get("mediaUrl").toString()).centerCrop().into
-                            (holder.mediaImageView);
+                    Glide.with(requireView())
+                            .load(post.get("mediaUrl").toString())
+                            .centerCrop()
+                            .into(holder.mediaImageView);
                 }
                 holder.mediaImageView.setOnClickListener(view -> {
                     appViewModel.postSeleccionado.setValue(post);
@@ -259,45 +249,76 @@ public class HomeFragment extends Fragment {
             } else {
                 holder.mediaImageView.setVisibility(View.GONE);
             }
-        }
 
+            // Botón de eliminar: visible solo si el usuario actual es el autor
+            if (postAuthorId.equals(userId)) {
+                holder.deletePostButton.setVisibility(View.VISIBLE);
+                holder.deletePostButton.setImageResource(R.drawable.basura); // Asegurar que la imagen se carga
+                holder.deletePostButton.setOnClickListener(view -> eliminarPost(postId, position));
+            } else {
+                holder.deletePostButton.setVisibility(View.GONE);
+            }
+
+        }
 
         @Override
         public int getItemCount() {
-            return lista == null ? 0 : lista.getDocuments().size();
+            return lista.size();
         }
-        public void establecerLista(DocumentList<Map<String,Object>> lista)
-        {
-            this.lista = lista;
-            notifyDataSetChanged();
-        }
-
-
     }
 
-    void obtenerPosts()
-    {
+    // Método para obtener los posts desde Appwrite
+    void obtenerPosts() {
         Databases databases = new Databases(client);
         Handler mainHandler = new Handler(Looper.getMainLooper());
         try {
             databases.listDocuments(
-                    getString(R.string.APPWRITE_DATABASE_ID), // databaseId
-                    getString(R.string.APPWRITE_POSTS_COLLECTION_ID), // collectionId
-                    Arrays.asList(Query.Companion.orderDesc("time"), Query.Companion.limit(50)), // queries (optional)
-
+                    getString(R.string.APPWRITE_DATABASE_ID),
+                    getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
+                    Arrays.asList(Query.Companion.orderDesc("time"), Query.Companion.limit(50)),
                     new CoroutineCallback<>((result, error) -> {
                         if (error != null) {
-                            Snackbar.make(requireView(), "Error al obtener los posts: "
-                                    + error.toString(), Snackbar.LENGTH_LONG).show();
+                            Snackbar.make(requireView(), "Error al obtener los posts: " + error.toString(), Snackbar.LENGTH_LONG).show();
                             return;
                         }
-                        System.out.println( result.toString() );
+                        System.out.println(result.toString());
                         mainHandler.post(() -> adapter.establecerLista(result));
                     })
             );
         } catch (AppwriteException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    void eliminarPost(String postId, int position) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Eliminar Post")
+                .setMessage("¿Estás seguro de que deseas eliminar este post?")
+                .setPositiveButton("Sí", (dialog, which) -> {
+                    Databases databases = new Databases(client);
+                    Handler mainHandler = new Handler(Looper.getMainLooper());
+
+                    databases.deleteDocument(
+                            getString(R.string.APPWRITE_DATABASE_ID),
+                            getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
+                            postId,
+                            new CoroutineCallback<>((result, error) -> {
+                                if (error != null) {
+                                    error.printStackTrace();
+                                    return;
+                                }
+                                mainHandler.post(() -> {
+                                    // Elimina el post de la lista del adaptador y notifica el cambio
+                                    adapter.lista.remove(position);
+                                    adapter.notifyItemRemoved(position);
+                                    adapter.notifyItemRangeChanged(position, adapter.lista.size());
+                                    Snackbar.make(requireView(), "Post eliminado", Snackbar.LENGTH_SHORT).show();
+                                });
+                            })
+                    );
+                })
+                .setNegativeButton("No", null)
+                .show();
     }
 
 }

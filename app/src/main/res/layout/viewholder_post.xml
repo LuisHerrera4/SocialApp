@@ -71,6 +71,15 @@
                     android:layout_gravity="center_vertical"
                     android:text="200K"/>
 
+                <ImageView
+                    android:id="@+id/deletePostButton"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_alignParentEnd="true"
+                    android:contentDescription="Eliminar post"
+                    android:padding="8dp"
+                    app:srcCompat="@drawable/basura" />
+
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

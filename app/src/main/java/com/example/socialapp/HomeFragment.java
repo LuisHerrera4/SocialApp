@@ -98,7 +98,32 @@ public class HomeFragment extends Fragment {
                     userId = result.getId();
                     displayNameTextView.setText(result.getName());
                     emailTextView.setText(result.getEmail());
-                    Glide.with(requireView()).load(R.drawable.user).into(photoImageView);
+
+                    // Obtener la imagen de perfil desde la base de datos de usuarios
+                    Databases databases = new Databases(client);
+                    try {
+                        databases.getDocument(
+                                getString(R.string.APPWRITE_DATABASE_ID),
+                                getString(R.string.APPWRITE_USERS_COLLECTION_ID),
+                                userId,
+                                new CoroutineCallback<>((userResult, userError) -> {
+                                    if (userError != null) {
+                                        userError.printStackTrace();
+                                        return;
+                                    }
+                                    String imageUrl = userResult.getData().get("profilePhotoURL") != null ?
+                                            userResult.getData().get("profilePhotoURL").toString() : "";
+
+                                    if (!imageUrl.isEmpty()) {
+                                        Glide.with(requireView()).load(imageUrl).circleCrop().into(photoImageView);
+                                    } else {
+                                        Glide.with(requireView()).load(R.drawable.user).into(photoImageView);
+                                    }
+                                })
+                        );
+                    } catch (AppwriteException e) {
+                        throw new RuntimeException(e);
+                    }
                     obtenerPosts();
                 });
             }));
@@ -167,14 +192,33 @@ public class HomeFragment extends Fragment {
             String postId = post.get("$id").toString();
             String postAuthorId = post.get("uid").toString();
 
-            // Cargar foto de perfil
-            if (post.get("authorPhotoUrl") == null) {
-                holder.authorPhotoImageView.setImageResource(R.drawable.user);
-            } else {
-                Glide.with(getContext())
-                        .load(post.get("authorPhotoUrl").toString())
-                        .circleCrop()
-                        .into(holder.authorPhotoImageView);
+            // Obtener la foto de perfil desde la colección de usuarios
+            Databases databases = new Databases(client);
+            try {
+                databases.getDocument(
+                        getString(R.string.APPWRITE_DATABASE_ID),
+                        getString(R.string.APPWRITE_USERS_COLLECTION_ID), // Colección de usuarios
+                        postAuthorId,
+                        new CoroutineCallback<>((result, error) -> {
+                            if (error != null) {
+                                error.printStackTrace();
+                                return;
+                            }
+                            String imageUrl = result.getData().get("profilePhotoURL") != null ? result.getData().get("profilePhotoURL").toString() : "";
+                            if (!imageUrl.isEmpty()) {
+                                holder.authorPhotoImageView.post(() ->
+                                        Glide.with(holder.itemView.getContext()).load(imageUrl).circleCrop().into(holder.authorPhotoImageView)
+                                );
+                            } else {
+                                holder.authorPhotoImageView.post(() ->
+                                        holder.authorPhotoImageView.setImageResource(R.drawable.user)
+                                );
+                            }
+
+                        })
+                );
+            } catch (AppwriteException e) {
+                throw new RuntimeException(e);
             }
 
             holder.authorTextView.setText(post.get("author").toString());
@@ -198,7 +242,7 @@ public class HomeFragment extends Fragment {
             holder.numLikesTextView.setText(String.valueOf(likes.size()));
 
             holder.likeImageView.setOnClickListener(view -> {
-                Databases databases = new Databases(client);
+                Databases databases2 = new Databases(client);
                 Handler mainHandler = new Handler(Looper.getMainLooper());
                 List<String> nuevosLikes = new ArrayList<>(likes);
                 if (nuevosLikes.contains(userId))
@@ -208,18 +252,18 @@ public class HomeFragment extends Fragment {
                 Map<String, Object> data = new HashMap<>();
                 data.put("likes", nuevosLikes);
                 try {
-                    databases.updateDocument(
+                    databases2.updateDocument(
                             getString(R.string.APPWRITE_DATABASE_ID),
                             getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
                             postId,
                             data,
                             new ArrayList<>(),
-                            new CoroutineCallback<>((result, error) -> {
-                                if (error != null) {
-                                    error.printStackTrace();
+                            new CoroutineCallback<>((result2, error2) -> {
+                                if (error2 != null) {
+                                    error2.printStackTrace();
                                     return;
                                 }
-                                System.out.println("Likes actualizados: " + result.toString());
+                                System.out.println("Likes actualizados: " + result2.toString());
                                 mainHandler.post(() -> obtenerPosts());
                             })
                     );
@@ -232,12 +276,12 @@ public class HomeFragment extends Fragment {
             if (post.get("mediaUrl") != null) {
                 holder.mediaImageView.setVisibility(View.VISIBLE);
                 if ("audio".equals(post.get("mediaType").toString())) {
-                    Glide.with(requireView())
+                    Glide.with(holder.itemView.getContext())
                             .load(R.drawable.audio)
                             .centerCrop()
                             .into(holder.mediaImageView);
                 } else {
-                    Glide.with(requireView())
+                    Glide.with(holder.itemView.getContext())
                             .load(post.get("mediaUrl").toString())
                             .centerCrop()
                             .into(holder.mediaImageView);
@@ -253,13 +297,13 @@ public class HomeFragment extends Fragment {
             // Botón de eliminar: visible solo si el usuario actual es el autor
             if (postAuthorId.equals(userId)) {
                 holder.deletePostButton.setVisibility(View.VISIBLE);
-                holder.deletePostButton.setImageResource(R.drawable.basura); // Asegurar que la imagen se carga
+                holder.deletePostButton.setImageResource(R.drawable.basura);
                 holder.deletePostButton.setOnClickListener(view -> eliminarPost(postId, position));
             } else {
                 holder.deletePostButton.setVisibility(View.GONE);
             }
-
         }
+
 
         @Override
         public int getItemCount() {

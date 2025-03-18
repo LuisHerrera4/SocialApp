@@ -2,15 +2,12 @@ package com.example.socialapp;
 
 import android.app.Application;
 import android.net.Uri;
-
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.MutableLiveData;
-
 import java.util.Map;
 
-public class AppViewModel extends AndroidViewModel
-{
+public class AppViewModel extends AndroidViewModel {
     public static class Media {
         public Uri uri;
         public String tipo;
@@ -19,10 +16,11 @@ public class AppViewModel extends AndroidViewModel
             this.tipo = tipo;
         }
     }
-    public MutableLiveData<Map<String,Object>> postSeleccionado = new
-            MutableLiveData<>();
-    public MutableLiveData<Media> mediaSeleccionado = new
-            MutableLiveData<>();
+    // LiveData para la URL de la foto de perfil
+    public MutableLiveData<String> profilePhotoUrl = new MutableLiveData<>();
+    public MutableLiveData<Map<String, Object>> postSeleccionado = new MutableLiveData<>();
+    public MutableLiveData<Media> mediaSeleccionado = new MutableLiveData<>();
+
     public AppViewModel(@NonNull Application application) {
         super(application);
     }

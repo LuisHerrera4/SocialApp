@@ -199,21 +199,6 @@ public class RegisterFragment extends Fragment {
     }
 
 
-
-    private byte[] convertirInputStreamABytes(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        int bytesRead;
-        byte[] data = new byte[1024];
-        while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-            buffer.write(data, 0, bytesRead);
-        }
-        buffer.flush();
-        return buffer.toByteArray();
-    }
-
-
-
-
     private void guardarUsuarioConImagen(String userId, String imageUrl) throws AppwriteException {
         Databases databases = new Databases(client);
         Map<String, Object> data = new HashMap<>();

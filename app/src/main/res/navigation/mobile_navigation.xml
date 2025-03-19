@@ -41,4 +41,14 @@
         android:name="com.example.socialapp.mediaFragment"
         android:label="fragment_media"
         tools:layout="@layout/fragment_media" />
+    <fragment
+        android:id="@+id/hashtagsFragment"
+        android:name="com.example.socialapp.HashtagsFragment"
+        android:label="Hashtag"
+        tools:layout="@layout/fragment_hashtags" />
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.example.socialapp.SettingsFragment"
+        android:label="fragment_settings"
+        tools:layout="@layout/fragment_settings" />
 </navigation>

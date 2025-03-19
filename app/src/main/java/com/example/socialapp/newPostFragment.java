@@ -1,4 +1,5 @@
 package com.example.socialapp;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -40,6 +41,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.appwrite.Client;
@@ -50,6 +52,9 @@ import io.appwrite.models.User;
 import io.appwrite.services.Account;
 import io.appwrite.services.Databases;
 import io.appwrite.services.Storage;
+
+// Asegúrate de tener la clase Hashtags en el paquete com.example.socialapp
+import com.example.socialapp.Hashtags;
 
 public class newPostFragment extends Fragment {
     Button publishButton;
@@ -62,23 +67,19 @@ public class newPostFragment extends Fragment {
     String mediaTipo;
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup
-            container, Bundle savedInstanceState) {
-// Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_new_post, container,
-                false);
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_new_post, container, false);
     }
 
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle
-            savedInstanceState) {
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         navController = Navigation.findNavController(view);
         appViewModel = new ViewModelProvider(requireActivity()).get(AppViewModel.class);
 
-        client = new Client(requireContext())
-                .setProject(getString(R.string.APPWRITE_PROJECT_ID));
+        client = new Client(requireContext()).setProject(getString(R.string.APPWRITE_PROJECT_ID));
         publishButton = view.findViewById(R.id.publishButton);
         postContentEditText = view.findViewById(R.id.postContentEditText);
         publishButton.setOnClickListener(new View.OnClickListener() {
@@ -88,32 +89,22 @@ public class newPostFragment extends Fragment {
             }
         });
 
-        view.findViewById(R.id.camara_fotos).setOnClickListener(v ->
-                tomarFoto());
-        view.findViewById(R.id.camara_video).setOnClickListener(v ->
-                tomarVideo());
-        view.findViewById(R.id.grabar_audio).setOnClickListener(v ->
-                grabarAudio());
-        view.findViewById(R.id.imagen_galeria).setOnClickListener(v ->
-                seleccionarImagen());
-        view.findViewById(R.id.video_galeria).setOnClickListener(v ->
-                seleccionarVideo());
-        view.findViewById(R.id.audio_galeria).setOnClickListener(v ->
-                seleccionarAudio());
-        appViewModel.mediaSeleccionado.observe(getViewLifecycleOwner(), media ->
-        {
+        view.findViewById(R.id.camara_fotos).setOnClickListener(v -> tomarFoto());
+        view.findViewById(R.id.camara_video).setOnClickListener(v -> tomarVideo());
+        view.findViewById(R.id.grabar_audio).setOnClickListener(v -> grabarAudio());
+        view.findViewById(R.id.imagen_galeria).setOnClickListener(v -> seleccionarImagen());
+        view.findViewById(R.id.video_galeria).setOnClickListener(v -> seleccionarVideo());
+        view.findViewById(R.id.audio_galeria).setOnClickListener(v -> seleccionarAudio());
+        appViewModel.mediaSeleccionado.observe(getViewLifecycleOwner(), media -> {
             this.mediaUri = media.uri;
             this.mediaTipo = media.tipo;
-            Glide.with(this).load(media.uri).into((ImageView)
-                    view.findViewById(R.id.previsualizacion));
+            Glide.with(this).load(media.uri).into((ImageView) view.findViewById(R.id.previsualizacion));
         });
     }
 
-
-
     private void publicar() {
         String postContent = postContentEditText.getText().toString();
-        if(TextUtils.isEmpty(postContent)){
+        if (TextUtils.isEmpty(postContent)) {
             postContentEditText.setError("Required");
             return;
         }
@@ -127,9 +118,7 @@ public class newPostFragment extends Fragment {
                 }
                 if (mediaTipo == null) {
                     guardarEnAppWrite(result, postContent, null);
-                }
-                else
-                {
+                } else {
                     pujaIguardarEnAppWrite(result, postContent);
                 }
             }));
@@ -138,12 +127,10 @@ public class newPostFragment extends Fragment {
         }
     }
 
-    void guardarEnAppWrite(User<Map<String, Object>> user, String content,String mediaUrl)
-    {
+    // Aquí se añade la extracción de hashtags
+    void guardarEnAppWrite(User<Map<String, Object>> user, String content, String mediaUrl) {
         Handler mainHandler = new Handler(Looper.getMainLooper());
-// Crear instancia del servicio Databases
         Databases databases = new Databases(client);
-// Datos del documento
         Map<String, Object> data = new HashMap<>();
         data.put("uid", user.getId().toString());
         data.put("author", user.getName().toString());
@@ -152,27 +139,23 @@ public class newPostFragment extends Fragment {
         data.put("mediaType", mediaTipo);
         data.put("mediaUrl", mediaUrl);
         data.put("time", Calendar.getInstance().getTimeInMillis());
-// Crear el documento
+
+        // Extraer y guardar los hashtags:
+        data.put("hashtags", Hashtags.extractHashtags(content));
+
         try {
             databases.createDocument(
                     getString(R.string.APPWRITE_DATABASE_ID),
                     getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
-                    "unique()", // Generar un ID único automáticamente
+                    "unique()",
                     data,
-                    new ArrayList<>(), // Permisos opcionales, como ["role:all"]
+                    new ArrayList<>(),
                     new CoroutineCallback<>((result, error) -> {
                         if (error != null) {
-                            Snackbar.make(requireView(), "Error: " +
-                                    error.toString(), Snackbar.LENGTH_LONG).show();
-                        }
-                        else
-                        {
-                            System.out.println("Post creado:" +
-                                    result.toString());
-                            mainHandler.post(() ->
-                            {
-                                navController.popBackStack();
-                            });
+                            Snackbar.make(requireView(), "Error: " + error.toString(), Snackbar.LENGTH_LONG).show();
+                        } else {
+                            System.out.println("Post creado: " + result.toString());
+                            mainHandler.post(() -> navController.popBackStack());
                         }
                     })
             );
@@ -181,8 +164,8 @@ public class newPostFragment extends Fragment {
         }
     }
 
-    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText)
-    {
+
+    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText) {
         Handler mainHandler = new Handler(Looper.getMainLooper());
         Storage storage = new Storage(client);
         File tempFile = null;
@@ -192,25 +175,20 @@ public class newPostFragment extends Fragment {
             throw new RuntimeException(e);
         }
         storage.createFile(
-                getString(R.string.APPWRITE_STORAGE_BUCKET_ID), // bucketId
-                "unique()", // fileId
-                InputFile.Companion.fromFile(tempFile), // file
-                new ArrayList<>(), // permissions (optional)
+                getString(R.string.APPWRITE_STORAGE_BUCKET_ID),
+                "unique()",
+                InputFile.Companion.fromFile(tempFile),
+                new ArrayList<>(),
                 new CoroutineCallback<>((result, error) -> {
                     if (error != null) {
-                        System.err.println("Error subiendo el archivo:" +
-                                error.getMessage() );
+                        System.err.println("Error subiendo el archivo:" + error.getMessage());
                         return;
                     }
-                    String downloadUrl =
-                            "https://cloud.appwrite.io/v1/storage/buckets/" +
-                                    getString(R.string.APPWRITE_STORAGE_BUCKET_ID) + "/files/" + result.getId() +
-                                    "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID) + "&project=" +
-                                    getString(R.string.APPWRITE_PROJECT_ID) + "&mode=admin";
-                    mainHandler.post(() ->
-                    {
-                        guardarEnAppWrite(user, postText, downloadUrl);
-                    });
+                    String downloadUrl = "https://cloud.appwrite.io/v1/storage/buckets/" +
+                            getString(R.string.APPWRITE_STORAGE_BUCKET_ID) + "/files/" + result.getId() +
+                            "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID) + "&project=" +
+                            getString(R.string.APPWRITE_PROJECT_ID) + "&mode=admin";
+                    mainHandler.post(() -> guardarEnAppWrite(user, postText, downloadUrl));
                 })
         );
     }
@@ -231,11 +209,9 @@ public class newPostFragment extends Fragment {
                         appViewModel.setMediaSeleccionado(mediaUri, "video");
                     });
     private final ActivityResultLauncher<Intent> grabadoraAudio =
-            registerForActivityResult(new
-                    ActivityResultContracts.StartActivityForResult(), result -> {
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == Activity.RESULT_OK) {
-                    appViewModel.setMediaSeleccionado(result.getData().getData(),
-                            "audio");
+                    appViewModel.setMediaSeleccionado(result.getData().getData(), "audio");
                 }
             });
     private void seleccionarImagen() {
@@ -244,7 +220,6 @@ public class newPostFragment extends Fragment {
     }
     private void seleccionarVideo() {
         mediaTipo = "video";
-
         galeria.launch("video/*");
     }
     private void seleccionarAudio() {
@@ -259,7 +234,7 @@ public class newPostFragment extends Fragment {
                             requireContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES))
             );
             camaraFotos.launch(mediaUri);
-        } catch (IOException e) {}
+        } catch (IOException e) { }
     }
     private void tomarVideo() {
         try {
@@ -268,17 +243,14 @@ public class newPostFragment extends Fragment {
                     File.createTempFile("vid", ".mp4",
                             requireContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES)));
             camaraVideos.launch(mediaUri);
-        } catch (IOException e) {}
+        } catch (IOException e) { }
     }
     private void grabarAudio() {
-        grabadoraAudio.launch(new
-                Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION));
+        grabadoraAudio.launch(new Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION));
     }
 
-    public File getFileFromUri(Context context, Uri uri) throws Exception
-    {
-        InputStream inputStream =
-                context.getContentResolver().openInputStream(uri);
+    public File getFileFromUri(Context context, Uri uri) throws Exception {
+        InputStream inputStream = context.getContentResolver().openInputStream(uri);
         if (inputStream == null) {
             throw new FileNotFoundException("No se pudo abrir el URI: " + uri);
         }
@@ -294,14 +266,12 @@ public class newPostFragment extends Fragment {
         inputStream.close();
         return tempFile;
     }
-    private String getFileName(Context context, Uri uri)
-    {
+
+    private String getFileName(Context context, Uri uri) {
         String fileName = "temp_file";
-        try (Cursor cursor = context.getContentResolver().query(uri, null, null,
-                null, null)) {
+        try (Cursor cursor = context.getContentResolver().query(uri, null, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
-                int nameIndex =
-                        cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
                 if (nameIndex != -1) {
                     fileName = cursor.getString(nameIndex);
                 }

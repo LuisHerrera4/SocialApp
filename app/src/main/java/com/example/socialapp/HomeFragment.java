@@ -1,5 +1,6 @@
 package com.example.socialapp;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -45,6 +46,7 @@ public class HomeFragment extends Fragment {
     private Account account;
 
     public HomeFragment() { }
+
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -123,12 +125,16 @@ public class HomeFragment extends Fragment {
                 navController.navigate(R.id.newPostFragment));
 
         RecyclerView postsRecyclerView = view.findViewById(R.id.postsRecyclerView);
-        adapter = new PostsAdapter(client, userId, appViewModel, new PostsAdapter.NavControllerProvider() {
-            @Override
-            public void navigate(int resId, Bundle bundle) {
-                navController.navigate(resId, bundle);
-            }
-        });
+        adapter = new PostsAdapter(client, userId, appViewModel,
+                new PostsAdapter.NavControllerProvider() {
+                    @Override
+                    public void navigate(int resId, Bundle bundle) {
+                        navController.navigate(resId, bundle);
+                    }
+                },
+                () -> obtenerPosts() // Se pasa un listener que llama a obtenerPosts
+        );
+
         postsRecyclerView.setAdapter(adapter);
     }
 
@@ -145,11 +151,12 @@ public class HomeFragment extends Fragment {
                             Snackbar.make(requireView(), "Error al obtener los posts: " + error.toString(), Snackbar.LENGTH_LONG).show();
                             return;
                         }
-                        mainHandler.post(() -> adapter.establecerLista(result));
+                        mainHandler.post(() -> adapter.establecerLista(result.getDocuments()));
                     })
             );
         } catch (AppwriteException e) {
             throw new RuntimeException(e);
         }
     }
+
 }

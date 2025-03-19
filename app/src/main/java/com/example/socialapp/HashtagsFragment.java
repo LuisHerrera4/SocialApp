@@ -56,7 +56,10 @@ public class HashtagsFragment extends Fragment {
 
         // Configurar RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-        adapter = new PostsAdapter(client, "", appViewModel, (resId, bundle) -> navController.navigate(resId, bundle));
+        adapter = new PostsAdapter(client, "", appViewModel,
+                (resId, bundle) -> navController.navigate(resId, bundle),
+                () -> {} // Se pasa una función vacía para evitar errores
+        );
         recyclerView.setAdapter(adapter);
 
         // Obtener el hashtag del argumento
@@ -69,10 +72,8 @@ public class HashtagsFragment extends Fragment {
             return;
         }
 
-        // Mostrar el hashtag en el TextView
         selectedHashtagTextView.setText(hashtag);
 
-        // Cargar posts relacionados al hashtag
         obtenerPostsPorHashtag();
     }
 
@@ -93,7 +94,7 @@ public class HashtagsFragment extends Fragment {
                         }
 
                         if (result != null && requireActivity() != null) {
-                            mainHandler.post(() -> adapter.establecerLista(result));
+                            mainHandler.post(() -> adapter.establecerLista(result.getDocuments()));
                         }
                     })
             );

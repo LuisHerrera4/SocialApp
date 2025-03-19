@@ -145,7 +145,6 @@ public class RegisterFragment extends Fragment {
             // Convertimos `imageUri` en un archivo real
             File file = convertirUriAFile(imageUri);
 
-            // ✅ Usamos `fromPath()`, que SÍ funciona en Appwrite SDK 6.1.0
             InputFile inputFile = InputFile.Companion.fromFile(file);
 
             storage.createFile(
@@ -160,7 +159,6 @@ public class RegisterFragment extends Fragment {
                         }
                         System.out.println("Imagen subida con éxito. ID: " + result.getId());
 
-                        // ✅ Generamos manualmente la URL correcta de Appwrite
                         String imageUrl = obtenerUrlArchivo(result.getId());
 
                         try {

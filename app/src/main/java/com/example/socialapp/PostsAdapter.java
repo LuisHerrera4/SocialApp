@@ -82,7 +82,6 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
         return new PostViewHolder(itemView);
     }
 
-    @Override
     public void onBindViewHolder(@NonNull final PostViewHolder holder, final int position) {
         final Map<String, Object> post = lista.get(position);
         final String postId = post.get("$id").toString();
@@ -112,7 +111,9 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
                     .into(holder.mediaImageView);
         } else {
             holder.mediaImageView.setVisibility(View.GONE);
-        } // Likes con persistencia en Appwrite
+        }
+
+        // Likes
         List<String> likes = (List<String>) post.get("likes");
         if (likes == null) likes = new ArrayList<>();
 
@@ -158,32 +159,26 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
             }
         });
 
-        // **Manejo de Hashtags**
+        // Manejo de Hashtags
         String mensaje = post.get("content") != null ? post.get("content").toString() : "";
-
-
         holder.contentTextView.setText(mensaje);
 
         List<String> hashtags = new ArrayList<>();
         StringBuilder mensajeSinHashtags = new StringBuilder();
 
-    // Separar las palabras del mensaje
+        // Separar las palabras del mensaje
         String[] palabras = mensaje.split(" ");
         for (String palabra : palabras) {
             if (palabra.startsWith("#")) {
-                hashtags.add(palabra); // Guardamos los hashtags
+                hashtags.add(palabra);
             } else {
                 mensajeSinHashtags.append(palabra).append(" ");
             }
         }
 
-        // Eliminar espacios extras al final
         String mensajeFinal = mensajeSinHashtags.toString().trim();
-
-        // Mostrar mensaje en contentTextView (sin hashtags)
         holder.contentTextView.setText(mensajeFinal.isEmpty() ? mensaje : mensajeFinal);
 
-        // Manejo de los hashtags
         if (!hashtags.isEmpty()) {
             String hashtagsText = String.join(" ", hashtags);
             SpannableString spannable = new SpannableString(hashtagsText);
@@ -209,7 +204,6 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
                 spannable.setSpan(clickableSpan, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
 
-            // Mostrar los hashtags en hashtagsTextView
             holder.hashtagsTextView.setText(spannable);
             holder.hashtagsTextView.setMovementMethod(LinkMovementMethod.getInstance());
             holder.hashtagsTextView.setVisibility(View.VISIBLE);
@@ -217,18 +211,17 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
             holder.hashtagsTextView.setVisibility(View.GONE);
         }
 
-
-
-
-
-        // Eliminar Post con persistencia en Appwrite
+        // Eliminar Post
         if (postAuthorId.equals(userId)) {
             holder.deletePostButton.setVisibility(View.VISIBLE);
             holder.deletePostButton.setOnClickListener(v -> eliminarPost(postId, position, context));
         } else {
             holder.deletePostButton.setVisibility(View.GONE);
         }
+
+        holder.retweetPostButton.setOnClickListener(view -> realizarRetweet(post, context));
     }
+
 
     @Override
     public int getItemCount() {
@@ -236,7 +229,7 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
     }
 
     public static class PostViewHolder extends RecyclerView.ViewHolder {
-        ImageView likeImageView, mediaImageView, deletePostButton, compartirPostButton;
+        ImageView likeImageView, mediaImageView, deletePostButton, compartirPostButton, retweetPostButton;
         TextView authorTextView, contentTextView, timeTextView, numLikesTextView, hashtagsTextView;
         public PostViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -249,6 +242,8 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
             deletePostButton = itemView.findViewById(R.id.deletePostButton);
             hashtagsTextView = itemView.findViewById(R.id.hashtagsTextView);
             compartirPostButton = itemView.findViewById(R.id.compartirPostButton);
+            retweetPostButton = itemView.findViewById(R.id.retweetPostButton);
+
 
         }
     }
@@ -283,5 +278,44 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
                 .setNegativeButton("No", null)
                 .show();
     }
+
+    private void realizarRetweet(Map<String, Object> post, Context context) {
+        String postIdOriginal = post.get("$id").toString();
+        String postAuthorOriginal = post.get("author").toString();
+        String contenidoOriginal = post.get("content").toString();
+
+        Databases databases = new Databases(client);
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+
+        // Crear un nuevo post como retweet
+        Map<String, Object> nuevoPost = new HashMap<>();
+        nuevoPost.put("uid", userId);
+        nuevoPost.put("author", "Retweet de " + postAuthorOriginal);
+        nuevoPost.put("content", contenidoOriginal);
+        nuevoPost.put("retweet", postIdOriginal);
+        nuevoPost.put("time", System.currentTimeMillis());
+
+        try {
+            databases.createDocument(
+                    context.getString(R.string.APPWRITE_DATABASE_ID),
+                    context.getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
+                    null,
+                    nuevoPost,
+                    new CoroutineCallback<Document>((result, error) -> {
+                        if (error != null) {
+                            error.printStackTrace();
+                            return;
+                        }
+                        mainHandler.post(() -> {
+                            Toast.makeText(context, "Retweet realizado", Toast.LENGTH_SHORT).show();
+                            postsUpdatedListener.actualizarPosts();
+                        });
+                    })
+            );
+        } catch (AppwriteException e) {
+            e.printStackTrace();
+        }
+    }
+
 
 }

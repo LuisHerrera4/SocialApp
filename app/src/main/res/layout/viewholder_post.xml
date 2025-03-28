@@ -103,6 +103,15 @@
                     android:contentDescription="compartir post"
                     android:padding="8dp"
                     app:srcCompat="@drawable/compartir" />
+                <ImageView
+                    android:id="@+id/retweetPostButton"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_alignParentEnd="true"
+                    android:contentDescription="Retweet"
+                    android:padding="8dp"
+                    app:srcCompat="@drawable/retweet" />
+
 
             </LinearLayout>
         </LinearLayout>

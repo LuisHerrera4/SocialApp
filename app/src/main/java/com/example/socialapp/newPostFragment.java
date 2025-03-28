@@ -6,17 +6,6 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.content.FileProvider;
-import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
-
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,6 +18,16 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.content.FileProvider;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
+import androidx.navigation.Navigation;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
@@ -53,11 +52,9 @@ import io.appwrite.services.Account;
 import io.appwrite.services.Databases;
 import io.appwrite.services.Storage;
 
-// Asegúrate de tener la clase Hashtags en el paquete com.example.socialapp
-import com.example.socialapp.Hashtags;
-
 public class newPostFragment extends Fragment {
     Button publishButton;
+    ImageView retweetButton;
     EditText postContentEditText;
     NavController navController;
     Client client;
@@ -65,10 +62,10 @@ public class newPostFragment extends Fragment {
     AppViewModel appViewModel;
     Uri mediaUri;
     String mediaTipo;
+    String originalPostId = null; // Para almacenar el ID del post original en caso de retweet
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_new_post, container, false);
     }
 
@@ -81,20 +78,20 @@ public class newPostFragment extends Fragment {
 
         client = new Client(requireContext()).setProject(getString(R.string.APPWRITE_PROJECT_ID));
         publishButton = view.findViewById(R.id.publishButton);
+        retweetButton = view.findViewById(R.id.retweetPostButton);
         postContentEditText = view.findViewById(R.id.postContentEditText);
-        publishButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                publicar();
-            }
-        });
 
+        publishButton.setOnClickListener(v -> publicar(null)); // Publicación normal
+        retweetButton.setOnClickListener(v -> publicar(originalPostId)); // Retweet con referencia
+
+        // Selección de medios (fotos, videos, audios)
         view.findViewById(R.id.camara_fotos).setOnClickListener(v -> tomarFoto());
         view.findViewById(R.id.camara_video).setOnClickListener(v -> tomarVideo());
         view.findViewById(R.id.grabar_audio).setOnClickListener(v -> grabarAudio());
         view.findViewById(R.id.imagen_galeria).setOnClickListener(v -> seleccionarImagen());
         view.findViewById(R.id.video_galeria).setOnClickListener(v -> seleccionarVideo());
         view.findViewById(R.id.audio_galeria).setOnClickListener(v -> seleccionarAudio());
+
         appViewModel.mediaSeleccionado.observe(getViewLifecycleOwner(), media -> {
             this.mediaUri = media.uri;
             this.mediaTipo = media.tipo;
@@ -102,10 +99,10 @@ public class newPostFragment extends Fragment {
         });
     }
 
-    private void publicar() {
+    private void publicar(@Nullable String originalPostId) {
         String postContent = postContentEditText.getText().toString();
-        if (TextUtils.isEmpty(postContent)) {
-            postContentEditText.setError("Required");
+        if (TextUtils.isEmpty(postContent) && originalPostId == null) {
+            postContentEditText.setError("Escribe algo o selecciona un post para retweetear.");
             return;
         }
         publishButton.setEnabled(false);
@@ -117,9 +114,13 @@ public class newPostFragment extends Fragment {
                     return;
                 }
                 if (mediaTipo == null) {
-                    guardarEnAppWrite(result, postContent, null);
+                    guardarEnAppWrite(result, postContent, null, originalPostId);
                 } else {
-                    pujaIguardarEnAppWrite(result, postContent);
+                    try {
+                        pujaIguardarEnAppWrite(result, postContent, originalPostId);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }));
         } catch (AppwriteException e) {
@@ -128,20 +129,19 @@ public class newPostFragment extends Fragment {
     }
 
     // Aquí se añade la extracción de hashtags
-    void guardarEnAppWrite(User<Map<String, Object>> user, String content, String mediaUrl) {
+    void guardarEnAppWrite(User<Map<String, Object>> user, String content, String mediaUrl, @Nullable String originalPostId) {
         Handler mainHandler = new Handler(Looper.getMainLooper());
         Databases databases = new Databases(client);
         Map<String, Object> data = new HashMap<>();
         data.put("uid", user.getId().toString());
         data.put("author", user.getName().toString());
-        data.put("authorPhotoUrl", null);
         data.put("content", content);
         data.put("mediaType", mediaTipo);
         data.put("mediaUrl", mediaUrl);
         data.put("time", Calendar.getInstance().getTimeInMillis());
-
-        // Extraer y guardar los hashtags:
-        data.put("hashtags", Hashtags.extractHashtags(content));
+        if (originalPostId != null) {
+            data.put("originalPostId", originalPostId); // Agregar referencia al post original
+        }
 
         try {
             databases.createDocument(
@@ -154,7 +154,6 @@ public class newPostFragment extends Fragment {
                         if (error != null) {
                             Snackbar.make(requireView(), "Error: " + error.toString(), Snackbar.LENGTH_LONG).show();
                         } else {
-                            System.out.println("Post creado: " + result.toString());
                             mainHandler.post(() -> navController.popBackStack());
                         }
                     })
@@ -165,15 +164,11 @@ public class newPostFragment extends Fragment {
     }
 
 
-    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText) {
+    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText, @Nullable String originalPostId) throws Exception {
         Handler mainHandler = new Handler(Looper.getMainLooper());
         Storage storage = new Storage(client);
-        File tempFile = null;
-        try {
-            tempFile = getFileFromUri(getContext(), mediaUri);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        File tempFile = getFileFromUri(requireContext(), mediaUri);
+
         storage.createFile(
                 getString(R.string.APPWRITE_STORAGE_BUCKET_ID),
                 "unique()",
@@ -181,14 +176,12 @@ public class newPostFragment extends Fragment {
                 new ArrayList<>(),
                 new CoroutineCallback<>((result, error) -> {
                     if (error != null) {
-                        System.err.println("Error subiendo el archivo:" + error.getMessage());
                         return;
                     }
                     String downloadUrl = "https://cloud.appwrite.io/v1/storage/buckets/" +
                             getString(R.string.APPWRITE_STORAGE_BUCKET_ID) + "/files/" + result.getId() +
-                            "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID) + "&project=" +
-                            getString(R.string.APPWRITE_PROJECT_ID) + "&mode=admin";
-                    mainHandler.post(() -> guardarEnAppWrite(user, postText, downloadUrl));
+                            "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID);
+                    mainHandler.post(() -> guardarEnAppWrite(user, postText, downloadUrl, originalPostId));
                 })
         );
     }

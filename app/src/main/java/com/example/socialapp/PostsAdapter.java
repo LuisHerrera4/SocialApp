@@ -211,6 +211,16 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
             holder.hashtagsTextView.setVisibility(View.GONE);
         }
 
+        holder.compartirPostButton.setOnClickListener(v -> {
+            // Obtén el contenido del post (puedes personalizarlo según lo que necesites compartir)
+            String contenido = post.get("content").toString();
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            shareIntent.putExtra(Intent.EXTRA_TEXT, contenido);
+            context.startActivity(Intent.createChooser(shareIntent, "Compartir post"));
+        });
+
+
         // Eliminar Post
         if (postAuthorId.equals(userId)) {
             holder.deletePostButton.setVisibility(View.VISIBLE);
@@ -219,7 +229,35 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
             holder.deletePostButton.setVisibility(View.GONE);
         }
 
-        holder.retweetPostButton.setOnClickListener(view -> realizarRetweet(post, context));
+        holder.retweetPostButton.setOnClickListener(v -> {
+            // Si el post ya es repost (tiene el campo "retweet"), mostramos un mensaje o evitamos el repost
+            if(post.containsKey("retweet")) {
+                Toast.makeText(context, "Este post ya es un repost", Toast.LENGTH_SHORT).show();
+            } else {
+                realizarRetweet(post, context);
+            }
+        });
+
+
+        // Obtén el valor de isRepost (si no existe, se considera false)
+        boolean isRepost = false;
+        if(post.containsKey("isRepost")) {
+            Object flag = post.get("isRepost");
+            if(flag instanceof Boolean) {
+                isRepost = (Boolean) flag;
+            }
+        }
+
+// Si es repost, actualiza el texto del autor (o muestra un ícono, según prefieras)
+        if(isRepost) {
+            // Si en el documento ya se guardó "author" como "Retweet de ...", quizá aquí solo necesites destacar
+            holder.authorTextView.setText(post.get("author").toString());
+            // Opcional: podrías cambiar el color o agregar un prefijo
+             holder.authorTextView.setText("Retweet de " + post.get("author").toString());
+        } else {
+            holder.authorTextView.setText(post.get("author").toString());
+        }
+
     }
 
 
@@ -247,6 +285,49 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
 
         }
     }
+
+    private void realizarRetweet(Map<String, Object> post, Context context) {
+        // Si el post tiene el campo "retweet", se toma ese valor como ID original; si no, se toma el id actual.
+        String postIdOriginal = post.containsKey("retweet") ? post.get("retweet").toString() : post.get("$id").toString();
+        String postAuthorOriginal = post.get("author").toString();
+        String contenidoOriginal = post.get("content").toString();
+
+        Databases databases = new Databases(client);
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+
+        // Crear un nuevo post como retweet
+        Map<String, Object> nuevoPost = new HashMap<>();
+        nuevoPost.put("uid", userId);
+        // Es recomendable que el campo "author" ya incluya la indicación de retweet,
+        // o bien puedes hacerlo aquí:
+        nuevoPost.put("author", "Retweet de " + postAuthorOriginal);
+        nuevoPost.put("content", contenidoOriginal);
+        nuevoPost.put("retweet", postIdOriginal);
+        nuevoPost.put("time", System.currentTimeMillis());
+        nuevoPost.put("isRepost", true);
+
+        try {
+            databases.createDocument(
+                    context.getString(R.string.APPWRITE_DATABASE_ID),
+                    context.getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
+                    null,
+                    nuevoPost,
+                    new CoroutineCallback<Document>((result, error) -> {
+                        if (error != null) {
+                            error.printStackTrace();
+                            return;
+                        }
+                        mainHandler.post(() -> {
+                            Toast.makeText(context, "Retweet realizado", Toast.LENGTH_SHORT).show();
+                            postsUpdatedListener.actualizarPosts();
+                        });
+                    })
+            );
+        } catch (AppwriteException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     void eliminarPost(String postId, int position, Context context) {
         new AlertDialog.Builder(context)
@@ -277,44 +358,6 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
                 })
                 .setNegativeButton("No", null)
                 .show();
-    }
-
-    private void realizarRetweet(Map<String, Object> post, Context context) {
-        String postIdOriginal = post.get("$id").toString();
-        String postAuthorOriginal = post.get("author").toString();
-        String contenidoOriginal = post.get("content").toString();
-
-        Databases databases = new Databases(client);
-        Handler mainHandler = new Handler(Looper.getMainLooper());
-
-        // Crear un nuevo post como retweet
-        Map<String, Object> nuevoPost = new HashMap<>();
-        nuevoPost.put("uid", userId);
-        nuevoPost.put("author", "Retweet de " + postAuthorOriginal);
-        nuevoPost.put("content", contenidoOriginal);
-        nuevoPost.put("retweet", postIdOriginal);
-        nuevoPost.put("time", System.currentTimeMillis());
-
-        try {
-            databases.createDocument(
-                    context.getString(R.string.APPWRITE_DATABASE_ID),
-                    context.getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
-                    null,
-                    nuevoPost,
-                    new CoroutineCallback<Document>((result, error) -> {
-                        if (error != null) {
-                            error.printStackTrace();
-                            return;
-                        }
-                        mainHandler.post(() -> {
-                            Toast.makeText(context, "Retweet realizado", Toast.LENGTH_SHORT).show();
-                            postsUpdatedListener.actualizarPosts();
-                        });
-                    })
-            );
-        } catch (AppwriteException e) {
-            e.printStackTrace();
-        }
     }
 
 

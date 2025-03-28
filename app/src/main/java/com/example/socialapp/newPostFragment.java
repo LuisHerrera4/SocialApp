@@ -1,11 +1,21 @@
 package com.example.socialapp;
-
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.content.FileProvider;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
+import androidx.navigation.Navigation;
+
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,16 +29,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.content.FileProvider;
-import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
-
 import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
 
@@ -40,7 +40,6 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import io.appwrite.Client;
@@ -54,7 +53,6 @@ import io.appwrite.services.Storage;
 
 public class newPostFragment extends Fragment {
     Button publishButton;
-    ImageView retweetButton;
     EditText postContentEditText;
     NavController navController;
     Client client;
@@ -62,11 +60,15 @@ public class newPostFragment extends Fragment {
     AppViewModel appViewModel;
     Uri mediaUri;
     String mediaTipo;
-    String originalPostId = null; // Para almacenar el ID del post original en caso de retweet
+    String originalPostId = null;
+
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_new_post, container, false);
+    public View onCreateView(LayoutInflater inflater, ViewGroup
+            container, Bundle savedInstanceState) {
+// Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_new_post, container,
+                false);
     }
 
     @Override
@@ -76,15 +78,17 @@ public class newPostFragment extends Fragment {
         navController = Navigation.findNavController(view);
         appViewModel = new ViewModelProvider(requireActivity()).get(AppViewModel.class);
 
-        client = new Client(requireContext()).setProject(getString(R.string.APPWRITE_PROJECT_ID));
+        // Recuperar opcionalmente el ID del post original para repost (si se pasa por argumentos)
+        if(getArguments() != null && getArguments().containsKey("originalPostId")) {
+            originalPostId = getArguments().getString("originalPostId");
+        }
+
+        client = new Client(requireContext())
+                .setProject(getString(R.string.APPWRITE_PROJECT_ID));
         publishButton = view.findViewById(R.id.publishButton);
-        retweetButton = view.findViewById(R.id.retweetPostButton);
         postContentEditText = view.findViewById(R.id.postContentEditText);
+        publishButton.setOnClickListener(v -> publicar());
 
-        publishButton.setOnClickListener(v -> publicar(null)); // Publicación normal
-        retweetButton.setOnClickListener(v -> publicar(originalPostId)); // Retweet con referencia
-
-        // Selección de medios (fotos, videos, audios)
         view.findViewById(R.id.camara_fotos).setOnClickListener(v -> tomarFoto());
         view.findViewById(R.id.camara_video).setOnClickListener(v -> tomarVideo());
         view.findViewById(R.id.grabar_audio).setOnClickListener(v -> grabarAudio());
@@ -99,10 +103,11 @@ public class newPostFragment extends Fragment {
         });
     }
 
-    private void publicar(@Nullable String originalPostId) {
+
+    private void publicar() {
         String postContent = postContentEditText.getText().toString();
-        if (TextUtils.isEmpty(postContent) && originalPostId == null) {
-            postContentEditText.setError("Escribe algo o selecciona un post para retweetear.");
+        if(TextUtils.isEmpty(postContent)){
+            postContentEditText.setError("Required");
             return;
         }
         publishButton.setEnabled(false);
@@ -114,13 +119,11 @@ public class newPostFragment extends Fragment {
                     return;
                 }
                 if (mediaTipo == null) {
-                    guardarEnAppWrite(result, postContent, null, originalPostId);
-                } else {
-                    try {
-                        pujaIguardarEnAppWrite(result, postContent, originalPostId);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
+                    guardarEnAppWrite(result, postContent, null);
+                }
+                else
+                {
+                    pujaIguardarEnAppWrite(result, postContent);
                 }
             }));
         } catch (AppwriteException e) {
@@ -128,33 +131,50 @@ public class newPostFragment extends Fragment {
         }
     }
 
-    // Aquí se añade la extracción de hashtags
-    void guardarEnAppWrite(User<Map<String, Object>> user, String content, String mediaUrl, @Nullable String originalPostId) {
+    void guardarEnAppWrite(User<Map<String, Object>> user, String content,String mediaUrl)
+    {
         Handler mainHandler = new Handler(Looper.getMainLooper());
+// Crear instancia del servicio Databases
         Databases databases = new Databases(client);
+// Datos del documento
         Map<String, Object> data = new HashMap<>();
         data.put("uid", user.getId().toString());
         data.put("author", user.getName().toString());
+        data.put("authorPhotoUrl", null);
         data.put("content", content);
         data.put("mediaType", mediaTipo);
         data.put("mediaUrl", mediaUrl);
         data.put("time", Calendar.getInstance().getTimeInMillis());
-        if (originalPostId != null) {
-            data.put("originalPostId", originalPostId); // Agregar referencia al post original
-        }
 
+        // Si es repost, añade la referencia y marca que es repost
+
+        if(originalPostId != null) {
+            data.put("retweet", originalPostId);
+            data.put("isRepost", true);
+        } else {
+            data.put("isRepost", false);
+        }
+// Crear el documento
         try {
             databases.createDocument(
                     getString(R.string.APPWRITE_DATABASE_ID),
                     getString(R.string.APPWRITE_POSTS_COLLECTION_ID),
-                    "unique()",
+                    "unique()", // Generar un ID único automáticamente
                     data,
-                    new ArrayList<>(),
+                    new ArrayList<>(), // Permisos opcionales, como ["role:all"]
                     new CoroutineCallback<>((result, error) -> {
                         if (error != null) {
-                            Snackbar.make(requireView(), "Error: " + error.toString(), Snackbar.LENGTH_LONG).show();
-                        } else {
-                            mainHandler.post(() -> navController.popBackStack());
+                            Snackbar.make(requireView(), "Error: " +
+                                    error.toString(), Snackbar.LENGTH_LONG).show();
+                        }
+                        else
+                        {
+                            System.out.println("Post creado:" +
+                                    result.toString());
+                            mainHandler.post(() ->
+                            {
+                                navController.popBackStack();
+                            });
                         }
                     })
             );
@@ -163,25 +183,36 @@ public class newPostFragment extends Fragment {
         }
     }
 
-
-    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText, @Nullable String originalPostId) throws Exception {
+    private void pujaIguardarEnAppWrite(User<Map<String, Object>> user, final String postText)
+    {
         Handler mainHandler = new Handler(Looper.getMainLooper());
         Storage storage = new Storage(client);
-        File tempFile = getFileFromUri(requireContext(), mediaUri);
-
+        File tempFile;
+        try {
+            tempFile = getFileFromUri(getContext(), mediaUri);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         storage.createFile(
-                getString(R.string.APPWRITE_STORAGE_BUCKET_ID),
-                "unique()",
-                InputFile.Companion.fromFile(tempFile),
-                new ArrayList<>(),
+                getString(R.string.APPWRITE_STORAGE_BUCKET_ID), // bucketId
+                "unique()", // fileId
+                InputFile.Companion.fromFile(tempFile), // file
+                new ArrayList<>(), // permissions (optional)
                 new CoroutineCallback<>((result, error) -> {
                     if (error != null) {
+                        System.err.println("Error subiendo el archivo:" +
+                                error.getMessage() );
                         return;
                     }
-                    String downloadUrl = "https://cloud.appwrite.io/v1/storage/buckets/" +
-                            getString(R.string.APPWRITE_STORAGE_BUCKET_ID) + "/files/" + result.getId() +
-                            "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID);
-                    mainHandler.post(() -> guardarEnAppWrite(user, postText, downloadUrl, originalPostId));
+                    String downloadUrl =
+                            "https://cloud.appwrite.io/v1/storage/buckets/" +
+                                    getString(R.string.APPWRITE_STORAGE_BUCKET_ID) + "/files/" + result.getId() +
+                                    "/view?project=" + getString(R.string.APPWRITE_PROJECT_ID) + "&project=" +
+                                    getString(R.string.APPWRITE_PROJECT_ID) + "&mode=admin";
+                    mainHandler.post(() ->
+                    {
+                        guardarEnAppWrite(user, postText, downloadUrl);
+                    });
                 })
         );
     }
@@ -202,9 +233,11 @@ public class newPostFragment extends Fragment {
                         appViewModel.setMediaSeleccionado(mediaUri, "video");
                     });
     private final ActivityResultLauncher<Intent> grabadoraAudio =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            registerForActivityResult(new
+                    ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == Activity.RESULT_OK) {
-                    appViewModel.setMediaSeleccionado(result.getData().getData(), "audio");
+                    appViewModel.setMediaSeleccionado(result.getData().getData(),
+                            "audio");
                 }
             });
     private void seleccionarImagen() {
@@ -213,6 +246,7 @@ public class newPostFragment extends Fragment {
     }
     private void seleccionarVideo() {
         mediaTipo = "video";
+
         galeria.launch("video/*");
     }
     private void seleccionarAudio() {
@@ -227,7 +261,7 @@ public class newPostFragment extends Fragment {
                             requireContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES))
             );
             camaraFotos.launch(mediaUri);
-        } catch (IOException e) { }
+        } catch (IOException e) {}
     }
     private void tomarVideo() {
         try {
@@ -236,14 +270,17 @@ public class newPostFragment extends Fragment {
                     File.createTempFile("vid", ".mp4",
                             requireContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES)));
             camaraVideos.launch(mediaUri);
-        } catch (IOException e) { }
+        } catch (IOException e) {}
     }
     private void grabarAudio() {
-        grabadoraAudio.launch(new Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION));
+        grabadoraAudio.launch(new
+                Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION));
     }
 
-    public File getFileFromUri(Context context, Uri uri) throws Exception {
-        InputStream inputStream = context.getContentResolver().openInputStream(uri);
+    public File getFileFromUri(Context context, Uri uri) throws Exception
+    {
+        InputStream inputStream =
+                context.getContentResolver().openInputStream(uri);
         if (inputStream == null) {
             throw new FileNotFoundException("No se pudo abrir el URI: " + uri);
         }
@@ -259,12 +296,14 @@ public class newPostFragment extends Fragment {
         inputStream.close();
         return tempFile;
     }
-
-    private String getFileName(Context context, Uri uri) {
+    private String getFileName(Context context, Uri uri)
+    {
         String fileName = "temp_file";
-        try (Cursor cursor = context.getContentResolver().query(uri, null, null, null, null)) {
+        try (Cursor cursor = context.getContentResolver().query(uri, null, null,
+                null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
-                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                int nameIndex =
+                        cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
                 if (nameIndex != -1) {
                     fileName = cursor.getString(nameIndex);
                 }

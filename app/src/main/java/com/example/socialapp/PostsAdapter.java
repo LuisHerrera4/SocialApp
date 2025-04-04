@@ -86,7 +86,7 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
     public void onBindViewHolder(@NonNull final PostViewHolder holder, final int position) {
         final Map<String, Object> post = lista.get(position);
         final String postId = post.get("$id").toString();
-        final String postAuthorId = post.get("uid").toString();
+        final String postAuthorId = post.get("uid") != null ? post.get("uid").toString() : "";
         final Context context = holder.itemView.getContext();
 
         holder.authorTextView.setText(post.get("author").toString());
@@ -216,6 +216,20 @@ public class PostsAdapter extends RecyclerView.Adapter<PostsAdapter.PostViewHold
         } else {
             holder.hashtagsTextView.setVisibility(View.GONE);
         }
+
+        // Agregar funcionalidad para compartir el post
+        holder.compartirPostButton.setOnClickListener(v -> {
+            // Construir la URI del recurso compartir.png
+            Uri shareUri = Uri.parse("android.resource://" + v.getContext().getPackageName() + "/" + R.drawable.compartir);
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("image/png");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, shareUri);
+            shareIntent.putExtra(Intent.EXTRA_TEXT, "¡Mira este post!");
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            v.getContext().startActivity(Intent.createChooser(shareIntent, "Compartir post"));
+        });
+
+
 
 
 
